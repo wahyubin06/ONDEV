@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ONdev Driver - Mitra Pengemudi</title>
+    <style>
+        :root {
+            --primary: #FF6D00;
+            --primary-dark: #E65100;
+            --bg: #f5f5f5;
+            --card: #ffffff;
+            --text: #1a1a1a;
+            --shadow: 0 2px 16px rgba(0,0,0,0.08);
+            --radius: 20px;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: linear-gradient(180deg, #FFF3E0 0%, #f5f5f5 100%);
+            display: flex; justify-content: center; align-items: center;
+            min-height: 100vh; padding: 16px;
+        }
+        .app-container {
+            width: 100%; max-width: 430px; background: var(--bg);
+            border-radius: 32px; overflow: hidden; box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+            display: flex; flex-direction: column; height: 92vh; max-height: 880px;
+        }
+        .status-bar { background: var(--primary-dark); color: white; padding: 10px 20px; display: flex; justify-content: space-between; font-size: 12px; }
+        .header {
+            background: linear-gradient(135deg, #FF6D00, #FF9100);
+            padding: 14px 20px; color: white;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .logo { font-size: 20px; font-weight: 800; display: flex; align-items: center; gap: 8px; }
+        .driver-wallet {
+            display: flex; align-items: center; gap: 8px;
+            background: rgba(255,255,255,0.2); padding: 6px 14px; border-radius: 25px;
+            font-weight: 600; font-size: 14px;
+        }
+        .main-content { flex: 1; overflow-y: auto; padding: 16px; }
+        .tab-container { display: flex; gap: 8px; margin-bottom: 16px; }
+        .tab-btn {
+            flex: 1; padding: 10px; border: none; background: white; border-radius: 12px;
+            font-weight: 600; cursor: pointer; box-shadow: var(--shadow); color: var(--text);
+        }
+        .tab-btn.active { background: var(--primary); color: white; }
+        .order-card {
+            background: white; border-radius: 16px; padding: 16px; margin-bottom: 12px;
+            box-shadow: var(--shadow);
+        }
+        .status-badge {
+            display: inline-block; padding: 4px 10px; border-radius: 20px;
+            font-size: 11px; font-weight: 600; background: #FFF3E0; color: #E65100;
+        }
+        .status-badge.done { background: #E8F5E9; color: #2E7D32; }
+        .action-btn {
+            background: var(--primary); color: white; border: none; padding: 8px 14px;
+            border-radius: 20px; font-weight: 600; cursor: pointer; margin-right: 8px; font-size: 13px;
+        }
+        .action-btn.reject { background: #ccc; color: #333; }
+        .update-select { padding: 8px; border-radius: 8px; border: 1px solid #ddd; margin-right: 6px; max-width: 140px; }
+        .toast {
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%) translateY(-120px);
+            background: #1a1a1a; color: white; padding: 12px 24px; border-radius: 30px;
+            font-weight: 600; z-index: 200; transition: transform 0.4s;
+        }
+        .toast.show { transform: translateX(-50%) translateY(0); }
+        .login-box {
+            background: white; border-radius: 20px; padding: 24px; margin-top: 40px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.1);
+        }
+        .login-box input { width: 100%; padding: 12px; margin: 8px 0; border-radius: 12px; border: 1px solid #ddd; }
+    </style>
+</head>
+<body>
+<div class="app-container">
+    <div class="status-bar"><span id="timeDisplay">09:41</span><span>📶 📡 🔋</span></div>
+    <div class="header">
+        <div class="logo">🛵 ONdev Driver</div>
+        <div class="driver-wallet" id="walletDisplay" style="display:none;">
+            <span>💰</span> <span id="driverBalanceDisplay">Rp 0</span>
+        </div>
+    </div>
+    <div class="main-content" id="mainContent">
+        <!-- Akan diisi setelah login -->
+    </div>
+    <div class="toast" id="toast"></div>
+</div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-app.js";
+    import { getDatabase, ref, push, set, onValue, update, remove, runTransaction, get } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-database.js";
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyAesmM-QmNdH-dhfAciYBqsQECkLcsl9xk",
+        authDomain: "ondev-38321.firebaseapp.com",
+        projectId: "ondev-38321",
+        storageBucket: "ondev-38321.firebasestorage.app",
+        messagingSenderId: "604304489261",
+        appId: "1:604304489261:web:8b949c5a882ef47a7b71a4",
+        measurementId: "G-98QBWCMQN6",
+        databaseURL: "https://ondev-38321-default-rtdb.asia-southeast1.firebasedatabase.app" // GANTI
+    };
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    let currentDriverId = null;
+    let currentDriverData = null;
+    let currentTab = 'available';
+
+    window.showToast = function(msg) {
+        const t = document.getElementById('toast');
+        t.textContent = msg; t.classList.add('show');
+        clearTimeout(window._t); window._t = setTimeout(() => t.classList.remove('show'), 2200);
+    };
+
+    function updateTime() {
+        document.getElementById('timeDisplay').textContent = new Date().toLocaleTimeString('id-ID', {hour:'2-digit',minute:'2-digit'});
+    }
+    updateTime(); setInterval(updateTime, 30000);
+
+    // Tampilkan form login/daftar
+    function showLoginForm() {
+        document.getElementById('mainContent').innerHTML = `
+            <div class="login-box">
+                <h3>Masuk/Daftar Driver</h3>
+                <input id="driverPhone" type="text" placeholder="Nomor WhatsApp (contoh: 62812...)">
+                <input id="driverName" type="text" placeholder="Nama lengkap">
+                <button class="action-btn" style="width:100%;background:#4CAF50;" id="loginBtn">Masuk / Daftar</button>
+                <p style="font-size:12px;color:#666;">Gunakan nomor WA yang terdaftar, atau daftarkan baru.</p>
+            </div>
+        `;
+        document.getElementById('loginBtn').addEventListener('click', async () => {
+            const phone = document.getElementById('driverPhone').value.trim();
+            const name = document.getElementById('driverName').value.trim();
+            if (!phone || !name) return showToast('Isi nomor WA dan nama');
+            // Cek apakah sudah ada driver dengan ID tersebut
+            const driverSnap = await get(ref(db, 'drivers/' + phone));
+            if (driverSnap.exists()) {
+                // Sudah terdaftar, login
+                loginDriver(phone);
+            } else {
+                // Daftarkan baru
+                await set(ref(db, 'drivers/' + phone), { name: name, balance: 0, manualTopup: 0 });
+                loginDriver(phone);
+            }
+        });
+    }
+
+    function loginDriver(phone) {
+        localStorage.setItem('ondev_driver_id', phone);
+        currentDriverId = phone;
+        loadDriverInterface();
+    }
+
+    function loadDriverInterface() {
+        // Fetch data driver
+        get(ref(db, 'drivers/' + currentDriverId)).then(snap => {
+            currentDriverData = snap.val() || { name: 'Mitra', balance: 0 };
+            document.getElementById('mainContent').innerHTML = `
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                    <strong>${currentDriverData.name} (${currentDriverId})</strong>
+                    <button class="action-btn" style="background:#4CAF50;" onclick="window.requestTopup()">📈 Request Top‑Up</button>
+                </div>
+                <div class="tab-container">
+                    <button class="tab-btn active" onclick="switchTab('available')">📥 Order Masuk</button>
+                    <button class="tab-btn" onclick="switchTab('active')">🚀 Pesanan Aktif</button>
+                </div>
+                <div id="availableOrders"></div>
+                <div id="activeOrders" style="display:none;"></div>
+            `;
+            document.getElementById('walletDisplay').style.display = 'flex';
+            listenData();
+            switchTab('available');
+        });
+    }
+
+    function listenData() {
+        onValue(ref(db, 'drivers/' + currentDriverId), (snap) => {
+            const data = snap.val() || { balance: 0 };
+            document.getElementById('driverBalanceDisplay').textContent = 'Rp ' + (data.balance || 0).toLocaleString('id-ID');
+        });
+        onValue(ref(db, 'orders'), () => renderOrders());
+    }
+
+    window.switchTab = function(tab) {
+        currentTab = tab;
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById('availableOrders').style.display = tab==='available' ? 'block' : 'none';
+        document.getElementById('activeOrders').style.display = tab==='active' ? 'block' : 'none';
+        if(tab==='available') document.querySelector('.tab-btn').classList.add('active');
+        else document.querySelectorAll('.tab-btn')[1].classList.add('active');
+        renderOrders();
+    };
+
+    function renderOrders() {
+        get(ref(db, 'orders')).then(snap => {
+            const orders = [];
+            snap.forEach(child => orders.push({ id: child.key, ...child.val() }));
+            if (currentTab === 'available') {
+                const avail = orders.filter(o => o.status === 'Mencari Driver...');
+                document.getElementById('availableOrders').innerHTML = avail.length ? avail.map(o => `
+                    <div class="order-card">
+                        <h4>${o.icon} ${o.type} (${o.id})</h4>
+                        <p>${o.from} → ${o.to||''}</p>
+                        <p>Pengguna: ${o.userId || '-'}</p>
+                        <button class="action-btn" onclick="accept('${o.id}')">✅ Terima</button>
+                        <button class="action-btn reject" onclick="reject('${o.id}')">❌ Tolak</button>
+                    </div>`).join('') : '<p style="text-align:center;">🎉 Tidak ada order masuk</p>';
+            } else {
+                const active = orders.filter(o => o.driver === currentDriverId && o.status !== 'Selesai');
+                document.getElementById('activeOrders').innerHTML = active.length ? active.map(o => `
+                    <div class="order-card">
+                        <h4>${o.icon} ${o.type} (${o.id})</h4>
+                        <p>${o.from} → ${o.to||''}</p>
+                        <span class="status-badge ${o.status==='Selesai'?'done':''}">${o.status}</span>
+                        <select id="stat_${o.id}">
+                            <option value="">-- Update --</option>
+                            <option value="Menuju Lokasi">📍 Menuju Lokasi</option>
+                            <option value="Barang Diambil">📦 Barang Diambil</option>
+                            <option value="Dalam Perjalanan">🚀 Dalam Perjalanan</option>
+                            <option value="Sampai Tujuan">🏁 Sampai Tujuan</option>
+                            <option value="Selesai">✅ Selesai</option>
+                        </select>
+                        <button class="action-btn" onclick="updateStatus('${o.id}')">Update</button>
+                    </div>`).join('') : '<p style="text-align:center;">📭 Tidak ada pesanan aktif</p>';
+            }
+        });
+    }
+
+    window.accept = function(id) {
+        update(ref(db, 'orders/' + id), { status: 'Diterima', driver: currentDriverId });
+    };
+    window.reject = function(id) {
+        remove(ref(db, 'orders/' + id));
+    };
+    window.updateStatus = function(id) {
+        const sel = document.getElementById('stat_'+id);
+        if (!sel || !sel.value) return;
+        const newStatus = sel.value;
+        if (newStatus === 'Selesai') {
+            get(ref(db, 'orders/' + id)).then(snap => {
+                const order = snap.val();
+                const earning = order.earning || 0;
+                // Update order
+                update(ref(db, 'orders/' + id), { status: 'Selesai', earning });
+                // Tambahkan pendapatan ke driver (setelah dipotong komisi 10%)
+                runTransaction(ref(db, 'drivers/' + currentDriverId), (driverData) => {
+                    if (!driverData) driverData = { name: currentDriverData?.name || 'Mitra', balance: 0, manualTopup: 0 };
+                    const net = Math.floor(earning * 0.9);
+                    driverData.balance = (driverData.balance || 0) + net;
+                    return driverData;
+                });
+            });
+        } else {
+            update(ref(db, 'orders/' + id), { status: newStatus });
+        }
+    };
+
+    window.requestTopup = function() {
+        const amount = prompt('Jumlah top‑up yang diminta:');
+        if (!amount || isNaN(amount)) return;
+        push(ref(db, 'topupRequests'), {
+            driverId: currentDriverId,
+            driverName: currentDriverData?.name || currentDriverId,
+            amount: parseInt(amount),
+            status: 'pending',
+            timestamp: Date.now()
+        });
+        showToast('📤 Request terkirim');
+    };
+
+    // Inisialisasi
+    const savedDriverId = localStorage.getItem('ondev_driver_id');
+    if (savedDriverId) {
+        // Cek apakah ID masih valid di database
+        get(ref(db, 'drivers/' + savedDriverId)).then(snap => {
+            if (snap.exists()) {
+                currentDriverId = savedDriverId;
+                loadDriverInterface();
+            } else {
+                // ID tidak ditemukan, hapus lokal dan tampilkan login
+                localStorage.removeItem('ondev_driver_id');
+                showLoginForm();
+            }
+        });
+    } else {
+        showLoginForm();
+    }
+</script>
+</body>
+</html>

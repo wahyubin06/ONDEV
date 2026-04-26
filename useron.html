@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ONdev - Ojek Online #1 Indonesia</title>
+    <style>
+        :root {
+            --primary: #00C853;
+            --primary-dark: #009624;
+            --bg: #f5f5f5;
+            --card: #ffffff;
+            --text: #1a1a1a;
+            --shadow: 0 2px 16px rgba(0,0,0,0.08);
+            --radius: 20px;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: linear-gradient(180deg, #e8f5e9 0%, #f5f5f5 100%);
+            display: flex; justify-content: center; align-items: center;
+            min-height: 100vh; padding: 16px;
+        }
+        .app-container {
+            width: 100%; max-width: 430px; background: var(--bg);
+            border-radius: 32px; overflow: hidden; box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+            display: flex; flex-direction: column; height: 92vh; max-height: 880px;
+        }
+        .status-bar { background: var(--primary-dark); color: white; padding: 10px 20px; display: flex; justify-content: space-between; font-size: 12px; }
+        .header {
+            background: linear-gradient(135deg, #00C853, #00E676);
+            padding: 18px 20px 20px; color: white;
+        }
+        .header-top { display: flex; justify-content: space-between; align-items: center; }
+        .logo { display: flex; align-items: center; gap: 10px; font-size: 26px; font-weight: 800; }
+        .logo-icon { width: 42px; height: 42px; background: white; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 24px; }
+        .icon-btn {
+            width: 38px; height: 38px; background: rgba(255,255,255,0.2); border: none;
+            border-radius: 50%; cursor: pointer; font-size: 18px; color: white; display: flex; align-items: center; justify-content: center;
+        }
+        .greeting { margin-top: 12px; }
+        .main-content { flex: 1; overflow-y: auto; padding: 16px; }
+        .service-panels { display: flex; flex-direction: column; gap: 14px; margin-bottom: 10px; }
+        .service-card {
+            background: white; border-radius: var(--radius); padding: 18px 20px;
+            cursor: pointer; border: 2.5px solid transparent; box-shadow: var(--shadow);
+            transition: 0.3s; position: relative;
+        }
+        .service-card.active { border-color: var(--primary); background: #f9fff9; }
+        .service-card.active::before {
+            content: '✓'; position: absolute; top: 14px; right: 18px;
+            width: 26px; height: 26px; background: var(--primary); color: white;
+            border-radius: 50%; font-size: 14px; font-weight: 700; display: flex; align-items: center; justify-content: center;
+        }
+        .card-header { display: flex; align-items: center; gap: 14px; }
+        .card-icon { width: 54px; height: 54px; border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 28px; }
+        .detail-panel { background: white; border-radius: var(--radius); padding: 20px; margin-top: 6px; box-shadow: var(--shadow); display: none; }
+        .detail-panel.visible { display: block; }
+        .input-row { display: flex; align-items: center; gap: 10px; background: #f9f9f9; border-radius: 12px; padding: 4px 14px; border: 2px solid transparent; margin-bottom: 10px; }
+        .input-row:focus-within { border-color: var(--primary); background: #fff; }
+        .dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+        .dot-green { background: #00C853; } .dot-red { background: #EF5350; } .dot-orange { background: #FF6D00; }
+        .input-row input, .input-row textarea { flex: 1; border: none; background: transparent; padding: 12px 0; font-size: 14px; outline: none; resize: none; }
+        .price-estimate { background: #f0faf3; border-radius: 12px; padding: 14px 16px; display: flex; justify-content: space-between; margin-top: 6px; font-weight: 600; }
+        .order-btn { width: 100%; padding: 15px; background: var(--primary); color: white; border: none; border-radius: 30px; font-size: 16px; font-weight: 700; cursor: pointer; margin-top: 8px; }
+        .order-btn:disabled { background: #aaa; cursor: not-allowed; }
+        .btn-outline { width: 100%; padding: 12px; background: transparent; color: var(--primary); border: 2px solid var(--primary); border-radius: 30px; font-size: 14px; font-weight: 700; cursor: pointer; margin-top: 8px; }
+        .bottom-nav { display: flex; background: white; padding: 8px 12px 14px; border-top: 1px solid #eee; gap: 4px; }
+        .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; cursor: pointer; color: #999; font-size: 10px; background: none; border: none; }
+        .nav-item.active { color: var(--primary); }
+        .nav-icon { font-size: 22px; }
+        .toast {
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%) translateY(-120px);
+            background: #1a1a1a; color: white; padding: 12px 24px; border-radius: 30px;
+            font-weight: 600; z-index: 200; transition: transform 0.4s;
+        }
+        .toast.show { transform: translateX(-50%) translateY(0); }
+        .order-item {
+            background: white; border-radius: 16px; padding: 16px; margin-bottom: 12px;
+            box-shadow: var(--shadow); display: flex; gap: 14px; align-items: center;
+        }
+        .order-status {
+            font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 20px;
+            background: #FFF3E0; color: #E65100; display: inline-block;
+        }
+        .order-status.done { background: #E8F5E9; color: #2E7D32; }
+    </style>
+</head>
+<body>
+<div class="app-container">
+    <div class="status-bar"><span id="timeDisplay">09:41</span><span>📶 📡 🔋</span></div>
+    <div class="header">
+        <div class="header-top">
+            <div class="logo"><div class="logo-icon">🛵</div>ONdev</div>
+            <div class="header-actions">
+                <button class="icon-btn" onclick="window.showToast('🔔 Notifikasi')">🔔</button>
+                <button class="icon-btn" onclick="window.showToast('👤 Profil')">👤</button>
+            </div>
+        </div>
+        <div class="greeting">Selamat datang, <strong id="greetingName">Pengguna ONdev!</strong></div>
+    </div>
+
+    <div class="main-content">
+        <div id="homeSection">
+            <div class="service-panels">
+                <div class="service-card active" id="cardRide" onclick="window.selectService('ride')">
+                    <div class="card-header"><div class="card-icon" style="background:#E3F2FD;">🏍️</div><div><h3>Antar Jemput</h3><p>Pesan ojek motor</p></div></div>
+                </div>
+                <div class="service-card" id="cardPackage" onclick="window.selectService('package')">
+                    <div class="card-header"><div class="card-icon" style="background:#FFF3E0;">📦</div><div><h3>Kirim Paket</h3><p>Kirim barang instan</p></div></div>
+                </div>
+                <div class="service-card" id="cardShop" onclick="window.selectService('shop')">
+                    <div class="card-header"><div class="card-icon" style="background:#FCE4EC;">🛒</div><div><h3>Titip Belanja</h3><p>Kami belikan kebutuhan</p></div></div>
+                </div>
+            </div>
+            <div class="detail-panel visible" id="detailPanel"></div>
+        </div>
+        <div id="ordersSection" style="display:none;"><h3>📋 Riwayat Pesanan</h3><div id="ordersList"></div></div>
+        <div id="chatSection" style="display:none;"><h3>💬 Chat</h3><p>Chat dengan driver</p></div>
+        <div id="accountSection" style="display:none;"><h3>👤 Akun</h3><p>ID: <span id="accountId"></span></p></div>
+    </div>
+
+    <div class="bottom-nav">
+        <button class="nav-item active" onclick="window.switchTab('home')"><span class="nav-icon">🏠</span>Beranda</button>
+        <button class="nav-item" onclick="window.switchTab('orders')"><span class="nav-icon">📋</span>Pesanan</button>
+        <button class="nav-item" onclick="window.switchTab('chat')"><span class="nav-icon">💬</span>Chat</button>
+        <button class="nav-item" onclick="window.switchTab('account')"><span class="nav-icon">👤</span>Akun</button>
+    </div>
+    <div class="toast" id="toast"></div>
+</div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-app.js";
+    import { getDatabase, ref, push, set, onValue, get } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-database.js";
+
+    // ==================== KONFIGURASI ====================
+    const TARIFF_PER_KM = 4000;
+    const MIN_TARIFF = 10000;
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyAesmM-QmNdH-dhfAciYBqsQECkLcsl9xk",
+        authDomain: "ondev-38321.firebaseapp.com",
+        projectId: "ondev-38321",
+        storageBucket: "ondev-38321.firebasestorage.app",
+        messagingSenderId: "604304489261",
+        appId: "1:604304489261:web:8b949c5a882ef47a7b71a4",
+        measurementId: "G-98QBWCMQN6",
+        databaseURL: "https://ondev-38321-default-rtdb.asia-southeast1.firebasedatabase.app"
+    };
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    // ==================== STATE ====================
+    let currentService = 'ride';
+    let currentUserId = null;
+    let lastDistance = null;
+
+    // ==================== HELPER ====================
+    function updateTime() {
+        const now = new Date();
+        document.getElementById('timeDisplay').textContent = String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
+    }
+    updateTime(); setInterval(updateTime, 30000);
+
+    window.showToast = function(msg) {
+        const t = document.getElementById('toast');
+        t.textContent = msg; t.classList.add('show');
+        clearTimeout(window._toastTimer);
+        window._toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+    };
+
+    // ==================== HAVERSINE FORMULA ====================
+    function haversineDistance(lat1, lon1, lat2, lon2) {
+        const R = 6371; // Radius bumi dalam kilometer
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                  Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                  Math.sin(dLon/2) * Math.sin(dLon/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        return R * c;
+    }
+
+    // ==================== USER LOGIN ====================
+    async function initUser() {
+        let userId = localStorage.getItem('ondev_user_id');
+        if (!userId) {
+            userId = prompt('Masukkan nomor WhatsApp Anda (contoh: 6281234567890):');
+            if (!userId) userId = 'anonymous';
+            localStorage.setItem('ondev_user_id', userId);
+            set(ref(db, 'users/' + userId), { registeredAt: Date.now() });
+        }
+        currentUserId = userId;
+        document.getElementById('greetingName').textContent = userId;
+        document.getElementById('accountId').textContent = userId;
+        const snap = await get(ref(db, 'users/' + userId));
+        if (!snap.exists()) {
+            set(ref(db, 'users/' + userId), { registeredAt: Date.now() });
+        }
+    }
+
+    // ==================== LISTENER RIWAYAT ====================
+    function listenMyOrders() {
+        const ordersRef = ref(db, 'orders');
+        onValue(ordersRef, (snapshot) => {
+            const allOrders = [];
+            snapshot.forEach(child => allOrders.push({ id: child.key, ...child.val() }));
+            const myOrders = allOrders.filter(o => o.userId === currentUserId);
+            if (document.getElementById('ordersSection').style.display !== 'none') {
+                renderOrdersList(myOrders);
+            }
+        });
+    }
+
+    function renderOrdersList(orders) {
+        const container = document.getElementById('ordersList');
+        if (!orders.length) {
+            container.innerHTML = '<p style="text-align:center;color:#999;">Belum ada pesanan</p>';
+            return;
+        }
+        container.innerHTML = orders.map(o => `
+            <div class="order-item">
+                <div style="font-size:28px;">${o.icon || '📋'}</div>
+                <div style="flex:1;">
+                    <strong>${o.type}</strong> (${o.id})<br>
+                    <small>${o.from} → ${o.to || '-'}</small><br>
+                    <small>Biaya: Rp ${o.earning?.toLocaleString('id-ID') || '-'}</small>
+                    <div class="order-status ${o.status==='Selesai'?'done':''}">${o.status}</div>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    // ==================== NAVIGASI ====================
+    window.switchTab = function(tab) {
+        document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+        const targetNav = document.getElementById('nav'+tab.charAt(0).toUpperCase()+tab.slice(1));
+        if (targetNav) targetNav.classList.add('active');
+        ['home','orders','chat','account'].forEach(s => {
+            const el = document.getElementById(s+'Section');
+            if (el) el.style.display = s === tab ? 'block' : 'none';
+        });
+    };
+
+    // ==================== PILIH LAYANAN ====================
+    window.selectService = function(service) {
+        currentService = service;
+        ['ride','package','shop'].forEach(s => {
+            document.getElementById('card'+s.charAt(0).toUpperCase()+s.slice(1)).classList.toggle('active', s===service);
+        });
+        lastDistance = null;
+        renderDetailPanel();
+    };
+
+    // ==================== RENDER DETAIL PANEL ====================
+    function renderDetailPanel() {
+        const panel = document.getElementById('detailPanel');
+        panel.classList.add('visible');
+
+        const coordFields = `
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0;">
+                <div class="input-row"><span class="dot dot-green"></span><input id="originLat" type="number" placeholder="Latitude" step="any" value="-6.2088"></div>
+                <div class="input-row"><span class="dot dot-green"></span><input id="originLon" type="number" placeholder="Longitude" step="any" value="106.8456"></div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0;">
+                <div class="input-row"><span class="dot dot-red"></span><input id="destLat" type="number" placeholder="Latitude" step="any" value="-6.2000"></div>
+                <div class="input-row"><span class="dot dot-red"></span><input id="destLon" type="number" placeholder="Longitude" step="any" value="106.8166"></div>
+            </div>
+        `;
+
+        if (currentService === 'ride') {
+            panel.innerHTML = `
+                <h3>🏍️ Antar Jemput</h3>
+                <div class="input-row"><span class="dot dot-green"></span><input id="rideFrom" placeholder="Lokasi jemput" value="Jl. Sudirman, Jakarta"></div>
+                <div class="input-row"><span class="dot dot-red"></span><input id="rideTo" placeholder="Tujuan" value="Grand Indonesia, Jakarta"></div>
+                <small style="color:#666;">Masukkan koordinat atau klik "Gunakan Perkiraan"</small>
+                ${coordFields}
+                <div class="price-estimate">Biaya: <span id="rideEstimate">-</span></div>
+                <button class="order-btn" id="checkRideBtn" onclick="window.checkEstimate('ride')">🔍 Cek Tarif</button>
+                <button class="order-btn" id="orderRideBtn" onclick="window.handleOrder('Antar Jemput','🏍️')" disabled>Pesan Sekarang</button>
+            `;
+        } else if (currentService === 'package') {
+            panel.innerHTML = `
+                <h3>📦 Kirim Paket</h3>
+                <div class="input-row"><span class="dot dot-green"></span><input id="pkgFrom" placeholder="Alamat pengirim" value="Jl. Merdeka, Bandung"></div>
+                <div class="input-row"><span class="dot dot-red"></span><input id="pkgTo" placeholder="Alamat penerima" value="Jl. Dago, Bandung"></div>
+                <div class="input-row"><span class="dot dot-orange"></span><textarea id="pkgDesc" placeholder="Deskripsi paket">Dokumen</textarea></div>
+                <small style="color:#666;">Masukkan koordinat atau klik "Gunakan Perkiraan"</small>
+                ${coordFields}
+                <div class="price-estimate">Biaya: <span id="pkgEstimate">-</span></div>
+                <button class="order-btn" id="checkPkgBtn" onclick="window.checkEstimate('package')">🔍 Cek Tarif</button>
+                <button class="order-btn" id="orderPkgBtn" onclick="window.handleOrder('Kirim Paket','📦')" disabled>Kirim Sekarang</button>
+            `;
+        } else {
+            panel.innerHTML = `
+                <h3>🛒 Titip Belanja</h3>
+                <div class="input-row"><span class="dot dot-orange"></span><input id="shopStore" placeholder="Nama toko" value="Supermarket Segar, Jakarta"></div>
+                <div class="input-row"><span class="dot dot-green"></span><textarea id="shopItems" placeholder="Daftar belanja">Beras, Minyak</textarea></div>
+                <div class="input-row"><span class="dot dot-red"></span><input id="shopAddr" placeholder="Alamat antar" value="Jl. Anggrek, Jakarta"></div>
+                <small style="color:#666;">Masukkan koordinat atau klik "Gunakan Perkiraan"</small>
+                ${coordFields}
+                <div class="price-estimate">Biaya: <span id="shopEstimate">-</span></div>
+                <button class="order-btn" id="checkShopBtn" onclick="window.checkEstimate('shop')">🔍 Cek Tarif</button>
+                <button class="order-btn" id="orderShopBtn" onclick="window.handleOrder('Titip Belanja','🛒')" disabled>Pesan Titip Belanja</button>
+            `;
+        }
+    }
+
+    // ==================== CEK TARIF ====================
+    window.checkEstimate = function(type) {
+        const originLat = parseFloat(document.getElementById('originLat')?.value);
+        const originLon = parseFloat(document.getElementById('originLon')?.value);
+        const destLat = parseFloat(document.getElementById('destLat')?.value);
+        const destLon = parseFloat(document.getElementById('destLon')?.value);
+
+        const estimateId = type === 'ride' ? 'rideEstimate' : (type === 'package' ? 'pkgEstimate' : 'shopEstimate');
+        const orderBtnId = type === 'ride' ? 'orderRideBtn' : (type === 'package' ? 'orderPkgBtn' : 'orderShopBtn');
+
+        if (isNaN(originLat) || isNaN(originLon) || isNaN(destLat) || isNaN(destLon)) {
+            window.showToast('⚠️ Mohon isi semua koordinat dengan benar');
+            return;
+        }
+
+        lastDistance = haversineDistance(originLat, originLon, destLat, destLon);
+        const tariff = Math.max(MIN_TARIFF, Math.floor(lastDistance * TARIFF_PER_KM));
+
+        document.getElementById(estimateId).textContent = `Rp ${tariff.toLocaleString('id-ID')} (${lastDistance.toFixed(1)} km)`;
+        document.getElementById(orderBtnId).disabled = false;
+        window.showToast(`✅ Jarak: ${lastDistance.toFixed(1)} km | Tarif: Rp ${tariff.toLocaleString('id-ID')}`);
+    };
+
+    // ==================== BUAT PESANAN ====================
+    window.handleOrder = function(type, icon) {
+        if (!lastDistance) {
+            window.showToast('⚠️ Silakan cek tarif terlebih dahulu');
+            return;
+        }
+
+        let from, to, desc;
+        if (type === 'Antar Jemput') {
+            from = document.getElementById('rideFrom')?.value || '';
+            to = document.getElementById('rideTo')?.value || '';
+            desc = '';
+        } else if (type === 'Kirim Paket') {
+            from = document.getElementById('pkgFrom')?.value || '';
+            to = document.getElementById('pkgTo')?.value || '';
+            desc = document.getElementById('pkgDesc')?.value || '';
+        } else {
+            from = document.getElementById('shopStore')?.value || '';
+            to = document.getElementById('shopAddr')?.value || '';
+            desc = document.getElementById('shopItems')?.value || '';
+        }
+
+        const earning = Math.max(MIN_TARIFF, Math.floor(lastDistance * TARIFF_PER_KM));
+        const orderRef = push(ref(db, 'orders'));
+        set(orderRef, {
+            type, from, to, desc,
+            status: 'Mencari Driver...',
+            icon,
+            timestamp: Date.now(),
+            driver: null,
+            earning: earning,
+            distance: lastDistance,
+            userId: currentUserId
+        });
+        window.showToast('✅ Pesanan dibuat! Biaya: Rp ' + earning.toLocaleString('id-ID'));
+    };
+
+    // ==================== INISIALISASI ====================
+    initUser().then(() => {
+        renderDetailPanel();
+        listenMyOrders();
+    });
+</script>
+</body>
+</html>

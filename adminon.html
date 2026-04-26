@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ONdev Admin Panel</title>
+    <style>
+        :root { --primary: #1E88E5; --bg: #f5f5f5; --card: #fff; --text: #1a1a1a; --shadow: 0 2px 12px rgba(0,0,0,0.06); --radius: 16px; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', system-ui, sans-serif; background: #eef2f6; display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; padding: 24px; }
+        .admin-container { width: 100%; max-width: 800px; background: var(--bg); border-radius: 24px; box-shadow: 0 10px 40px rgba(0,0,0,0.1); overflow: hidden; }
+        .admin-header { background: var(--primary); color: white; padding: 20px 24px; font-size: 24px; font-weight: 700; display: flex; align-items: center; gap: 12px; }
+        .admin-nav { display: flex; background: white; padding: 10px 16px; gap: 8px; border-bottom: 1px solid #eee; flex-wrap: wrap; }
+        .nav-pill { padding: 8px 18px; border-radius: 25px; border: none; background: #f0f0f0; cursor: pointer; font-weight: 600; font-size: 14px; }
+        .nav-pill.active { background: var(--primary); color: white; }
+        .content { padding: 20px; }
+        .card { background: white; border-radius: var(--radius); padding: 18px; margin-bottom: 16px; box-shadow: var(--shadow); }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 20px; }
+        .stat-box { background: white; border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); display: flex; align-items: center; gap: 14px; }
+        .stat-icon { font-size: 28px; }
+        .stat-value { font-size: 22px; font-weight: 700; }
+        .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; background: #FFF3E0; color: #E65100; }
+        .badge.done { background: #E8F5E9; color: #2E7D32; }
+        .btn { padding: 8px 16px; border-radius: 20px; border: none; font-weight: 600; cursor: pointer; font-size: 13px; }
+        .btn-primary { background: #1E88E5; color: white; }
+        .btn-success { background: #00C853; color: white; }
+        .btn-danger { background: #ef5350; color: white; }
+        .toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%) translateY(-120px); background: #1a1a1a; color: white; padding: 12px 24px; border-radius: 30px; font-weight: 600; z-index: 200; transition: transform 0.4s; }
+        .toast.show { transform: translateX(-50%) translateY(0); }
+    </style>
+</head>
+<body>
+<div class="admin-container">
+    <div class="admin-header">🛵 ONdev Admin Panel</div>
+    <div class="admin-nav">
+        <button class="nav-pill active" onclick="switchTab('dashboard')">📊 Dashboard</button>
+        <button class="nav-pill" onclick="switchTab('orders')">📋 Pesanan</button>
+        <button class="nav-pill" onclick="switchTab('drivers')">👥 Driver</button>
+        <button class="nav-pill" onclick="switchTab('users')">👤 Pengguna</button>
+        <button class="nav-pill" onclick="switchTab('topup')">💸 Top‑Up</button>
+        <button class="nav-pill" onclick="switchTab('config')">⚙️ Komisi</button>
+    </div>
+    <div class="content" id="adminContent"></div>
+    <div class="toast" id="toast"></div>
+</div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-app.js";
+    import { getDatabase, ref, onValue, update, runTransaction, get } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-database.js";
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyAesmM-QmNdH-dhfAciYBqsQECkLcsl9xk",
+        authDomain: "ondev-38321.firebaseapp.com",
+        projectId: "ondev-38321",
+        storageBucket: "ondev-38321.firebasestorage.app",
+        messagingSenderId: "604304489261",
+        appId: "1:604304489261:web:8b949c5a882ef47a7b71a4",
+        measurementId: "G-98QBWCMQN6",
+        databaseURL: "https://ondev-38321-default-rtdb.asia-southeast1.firebasedatabase.app" // GANTI
+    };
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    window.showToast = function(msg) {
+        const t = document.getElementById('toast');
+        t.textContent = msg; t.classList.add('show');
+        clearTimeout(window._t); window._t = setTimeout(() => t.classList.remove('show'), 2200);
+    };
+
+    window.switchTab = function(tab) {
+        document.querySelectorAll('.nav-pill').forEach(p => p.classList.remove('active'));
+        document.querySelector(`.nav-pill:nth-child(${['dashboard','orders','drivers','users','topup','config'].indexOf(tab)+1})`).classList.add('active');
+        switch(tab) {
+            case 'dashboard': renderDashboard(); break;
+            case 'orders': renderOrders(); break;
+            case 'drivers': renderDrivers(); break;
+            case 'users': renderUsers(); break;
+            case 'topup': renderTopup(); break;
+            case 'config': renderConfig(); break;
+        }
+    };
+
+    function renderDashboard() {
+        Promise.all([
+            get(ref(db, 'orders')),
+            get(ref(db, 'users')),
+            get(ref(db, 'drivers'))
+        ]).then(([ordersSnap, usersSnap, driversSnap]) => {
+            const orders = []; ordersSnap.forEach(c => orders.push(c.val()));
+            const usersCount = usersSnap.size || 0;
+            const totalOrders = orders.length;
+            const completed = orders.filter(o => o.status === 'Selesai').length;
+            let commission = 0;
+            orders.forEach(o => { if (o.status === 'Selesai' && o.earning) commission += o.earning * 0.1; });
+            document.getElementById('adminContent').innerHTML = `
+                <div class="grid">
+                    <div class="stat-box"><span class="stat-icon">📦</span><div><div class="stat-value">${totalOrders}</div><div>Total Pesanan</div></div></div>
+                    <div class="stat-box"><span class="stat-icon">✅</span><div><div class="stat-value">${completed}</div><div>Selesai</div></div></div>
+                    <div class="stat-box"><span class="stat-icon">💸</span><div><div class="stat-value">Rp ${commission.toLocaleString('id-ID')}</div><div>Komisi Aplikasi</div></div></div>
+                    <div class="stat-box"><span class="stat-icon">👤</span><div><div class="stat-value">${usersCount}</div><div>Pengguna</div></div></div>
+                </div>
+            `;
+        });
+    }
+
+    function renderOrders() {
+        onValue(ref(db, 'orders'), (snap) => {
+            const orders = [];
+            snap.forEach(c => orders.push({id:c.key,...c.val()}));
+            let html = '<table width="100%"><tr><th>ID</th><th>Tipe</th><th>User</th><th>Driver</th><th>Status</th></tr>';
+            orders.forEach(o => html += `<tr><td>${o.id}</td><td>${o.icon||''} ${o.type}</td><td>${o.userId||'-'}</td><td>${o.driver||'-'}</td><td><span class="badge ${o.status==='Selesai'?'done':''}">${o.status}</span></td></tr>`);
+            html += '</table>';
+            document.getElementById('adminContent').innerHTML = html;
+        }, { onlyOnce: true });
+    }
+
+    function renderDrivers() {
+        onValue(ref(db, 'drivers'), (snap) => {
+            const drivers = snap.val() || {};
+            let html = '';
+            Object.keys(drivers).forEach(id => {
+                const d = drivers[id];
+                html += `<div class="card"><strong>${d.name || id}</strong> (${id})<br>💰 Saldo: <b>Rp ${(d.balance||0).toLocaleString('id-ID')}</b>
+                <input type="number" id="topup_${id}" placeholder="Nominal" style="width:100px;"> <button class="btn btn-success" onclick="window.adminTopup('${id}')">➕ Tambah</button></div>`;
+            });
+            document.getElementById('adminContent').innerHTML = html || '<p>Tidak ada driver.</p>';
+        }, { onlyOnce: true });
+    }
+
+    function renderUsers() {
+        onValue(ref(db, 'users'), (snap) => {
+            const users = [];
+            snap.forEach(c => users.push(c.key));
+            let html = '<h3>Daftar Pengguna (Nomor WA)</h3>';
+            if (users.length === 0) html += '<p>Tidak ada pengguna.</p>';
+            else html += '<ul>' + users.map(u => `<li>${u}</li>`).join('') + '</ul>';
+            document.getElementById('adminContent').innerHTML = html;
+        }, { onlyOnce: true });
+    }
+
+    function renderTopup() {
+        onValue(ref(db, 'topupRequests'), (snap) => {
+            const reqs = [];
+            snap.forEach(c => reqs.push({id:c.key,...c.val()}));
+            document.getElementById('adminContent').innerHTML = reqs.length ? reqs.map(r => `
+                <div class="card">
+                    <strong>${r.driverName}</strong> (${r.driverId}) - Rp ${r.amount.toLocaleString('id-ID')}
+                    <span class="badge">${r.status}</span>
+                    ${r.status==='pending' ? `<button class="btn btn-success" onclick="window.approveTopup('${r.id}')">✅ Setujui</button>` : ''}
+                </div>`).join('') : '<p>Tidak ada permintaan top‑up.</p>';
+        }, { onlyOnce: true });
+    }
+
+    window.adminTopup = function(driverId) {
+        const amt = parseInt(document.getElementById('topup_'+driverId).value);
+        if (!amt) return;
+        runTransaction(ref(db, 'drivers/'+driverId), (driver) => {
+            if (!driver) driver = { name: driverId, balance: 0, manualTopup: 0 };
+            driver.balance = (driver.balance||0) + amt;
+            driver.manualTopup = (driver.manualTopup||0) + amt;
+            return driver;
+        });
+        showToast('✅ Top‑up diberikan');
+    };
+
+    window.approveTopup = function(reqId) {
+        get(ref(db, 'topupRequests/'+reqId)).then(snap => {
+            const req = snap.val();
+            if (!req || req.status !== 'pending') return;
+            // Tambah saldo driver
+            runTransaction(ref(db, 'drivers/'+req.driverId), (driver) => {
+                if (!driver) driver = { name: req.driverName, balance: 0, manualTopup: 0 };
+                driver.balance = (driver.balance||0) + req.amount;
+                driver.manualTopup = (driver.manualTopup||0) + req.amount;
+                return driver;
+            });
+            // Update status request
+            update(ref(db, 'topupRequests/'+reqId), { status: 'approved' });
+            showToast('✅ Disetujui');
+        });
+    };
+
+    function renderConfig() {
+        document.getElementById('adminContent').innerHTML = `<div class="card"><h3>⚙️ Komisi Aplikasi</h3><p>Komisi 10% dari pendapatan driver (dipotong otomatis saat order selesai).</p></div>`;
+    }
+
+    // Inisialisasi
+    switchTab('dashboard');
+</script>
+</body>
+</html>
